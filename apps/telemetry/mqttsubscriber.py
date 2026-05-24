@@ -20,7 +20,10 @@ import django
 
 # --- Django setup (must happen before any app imports) ---
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
+# Respect an already-set DJANGO_SETTINGS_MODULE; fall back to production (not local)
+os.environ["DJANGO_SETTINGS_MODULE"] = os.environ.get(
+    "DJANGO_SETTINGS_MODULE", "config.settings.production"
+)
 django.setup()
 
 # --- Now safe to import Django-dependent modules ---
@@ -33,8 +36,10 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────
 # Configuration (reads from Django settings / .env)
 # ──────────────────────────────────────────────
-MQTT_HOST     = os.environ.get("EMQX_HOST", "localhost")
-MQTT_PORT     = int(os.environ.get("EMQX_PORT", 1884))       # our remapped port
+# Inside Docker the EMQX service is reachable via its compose service name "emqx".
+# Outside Docker (local dev) override with: EMQX_HOST=localhost EMQX_PORT=1883
+MQTT_HOST     = os.environ.get("EMQX_HOST", "emqx")
+MQTT_PORT     = int(os.environ.get("EMQX_PORT", 1883))
 MQTT_USERNAME = os.environ.get("EMQX_USERNAME", "")
 MQTT_PASSWORD = os.environ.get("EMQX_PASSWORD", "")
 import uuid
