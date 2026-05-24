@@ -1,4 +1,12 @@
 # scripts/test_publish.py
+# Publishes a single test telemetry message to EMQX.
+# Run from the project root: python scripts/test_publish.py
+#
+# Override connection settings via environment variables:
+#   EMQX_HOST  (default: localhost)
+#   EMQX_PORT  (default: 1883)
+#   EMQX_USERNAME / EMQX_PASSWORD  (optional, for authenticated brokers)
+
 import json, time, os
 import paho.mqtt.client as mqtt
 from dotenv import load_dotenv
@@ -6,7 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 MQTT_HOST = os.environ.get("EMQX_HOST", "localhost")
-MQTT_PORT = int(os.environ.get("EMQX_PORT", 1884))
+MQTT_PORT = int(os.environ.get("EMQX_PORT", 1883))  # compose exposes 1883
 MQTT_USERNAME = os.environ.get("EMQX_USERNAME", "")
 MQTT_PASSWORD = os.environ.get("EMQX_PASSWORD", "")
 

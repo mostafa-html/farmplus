@@ -1,12 +1,15 @@
 import os, sys, django
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
+# Respect an already-set DJANGO_SETTINGS_MODULE; fall back to production (not local)
+os.environ["DJANGO_SETTINGS_MODULE"] = os.environ.get(
+    "DJANGO_SETTINGS_MODULE", "config.settings.production"
+)
 django.setup()
 
 from apps.devices.models import Organization, Farm, Device
 
-# ─── Data Definition ──────────────────────────────────────────────────────────
+# ─── Data Definition ──────────────────────────────────────────────────────────────────
 
 SEED_DATA = [
     {
@@ -92,7 +95,7 @@ SEED_DATA = [
     },
 ]
 
-# ─── Seeding Logic ────────────────────────────────────────────────────────────
+# ─── Seeding Logic ──────────────────────────────────────────────────────────────────
 
 total_orgs = total_farms = total_devices = 0
 
@@ -132,3 +135,24 @@ for entry in SEED_DATA:
                 total_devices += 1
 
 print(f"\n[OK] Seed complete — {total_orgs} orgs, {total_farms} farms, {total_devices} devices added.")
+
+# ─── Reset Redis consumer group so the PEL never gets stuck ───────────────────
+# On first run: creates the group starting from position 0 (reprocess all messages).
+# On subsequent runs: group already exists, the except block is silently skipped.
+
+import redis as redis_lib
+from django.conf import settings
+
+redis_url = getattr(settings, "REDIS_URL", os.environ.get("REDIS_URL", "redis://redis:6379/0"))
+r = redis_lib.from_url(redis_url)
+
+try:
+    r.xgroup_destroy("telemetry:stream", "pipeline-workers")
+except Exception:
+    pass
+
+try:
+    r.xgroup_create("telemetry:stream", "pipeline-workers", id="0", mkstream=True)
+    print("[OK] Redis consumer group reset to position 0")
+except Exception as e:
+    print(f"[WARN] Could not reset consumer group: {e}")

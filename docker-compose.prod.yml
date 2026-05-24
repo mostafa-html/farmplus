@@ -1,10 +1,18 @@
 # docker-compose.prod.yml
 # Production deployment — run with:
 #   docker compose -f docker-compose.prod.yml up -d
+#
+# First-time setup (one command):
+#   cp .env.example .env   # fill in your values
+#   docker build -t farmpulse-app:latest .
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# The `init` service runs migrations + seed automatically on first start,
+# then exits. All app services wait for it before starting.
 
 services:
 
-  # ─── Infrastructure ────────────────────────────────────────────────────────
+  # ─── Infrastructure ──────────────────────────────────────────────────────────────────
 
   timescaledb:
     image: timescale/timescaledb:latest-pg16
@@ -46,7 +54,7 @@ services:
     ports:
       - "1883:1883"    # MQTT — devices connect here
       - "8083:8083"    # MQTT over WebSocket
-      # 18083 dashboard NOT exposed in prod — access via SSH tunnel only
+      # 18083 dashboard NOT exposed in prod — see README for access instructions
     volumes:
       - emqx_data:/opt/emqx/data
       - emqx_log:/opt/emqx/log
@@ -63,7 +71,25 @@ services:
       timeout: 10s
       retries: 5
 
-  # ─── Application (all share one built image) ──────────────────────────────
+  # ─── One-time Init (runs migrate + seed, then exits) ───────────────────────
+
+  init:
+    image: ${FARMPULSE_IMAGE:-farmpulse-app:latest}
+    container_name: farmpulse_init
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python scripts/seed_dev_data.py"
+    env_file: .env
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - farmpulse_net
+    restart: "no"
+
+  # ─── Application (all share one built image) ─────────────────────────────
 
   django:
     image: ${FARMPULSE_IMAGE:-farmpulse-app:latest}
@@ -78,6 +104,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      init:
+        condition: service_completed_successfully
     networks:
       - farmpulse_net
     healthcheck:
@@ -97,6 +125,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      init:
+        condition: service_completed_successfully
     networks:
       - farmpulse_net
 
@@ -111,6 +141,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      init:
+        condition: service_completed_successfully
     networks:
       - farmpulse_net
 
@@ -125,6 +157,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      init:
+        condition: service_completed_successfully
     networks:
       - farmpulse_net
 
